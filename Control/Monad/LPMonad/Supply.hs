@@ -1,6 +1,6 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, MultiParamTypeClasses, FlexibleInstances, UndecidableInstances #-}
 
-module Control.Monad.LPMonad.Supply (module Control.Monad.LPMonad.Supply.Class, Var(..), VSupply, VSupplyT) where
+module Control.Monad.LPMonad.Supply (module Control.Monad.LPMonad.Supply.Class, Var(..), VSupply, VSupplyT, runVSupply, runVSupplyT) where
 
 import Control.Monad.Identity
 import Control.Monad.Trans
