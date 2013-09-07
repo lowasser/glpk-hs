@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, ScopedTypeVariables, ForeignFunctionInterface #-}
+{-# LANGUAGE RecordWildCards, ScopedTypeVariables, ForeignFunctionInterface, BangPatterns #-}
 module Data.LinearProgram.GLPK.Internal (writeProblem, solveSimplex, mipSolve,
 	getObjVal, getRowPrim, getColPrim, mipObjVal, mipRowVal, mipColVal, getBadRay) where
 {-(writeProblem, addCols,
@@ -6,8 +6,7 @@ module Data.LinearProgram.GLPK.Internal (writeProblem, solveSimplex, mipSolve,
 	mipColVal, mipRowVal, mipObjVal, mipSolve, setColBounds, setColKind, setColName, setMatRow,
 	setObjCoef, setObjectiveDirection, setRowBounds, setRowName, solveSimplex) where-}
 
-import Control.Monad (liftM, guard)
-import Data.Foldable
+import Control.Monad
 
 import Foreign.Ptr
 import Foreign.C
@@ -19,35 +18,31 @@ import Data.Map hiding (map)
 import Data.LinearProgram.Common
 import Data.LinearProgram.GLPK.Types
 
-import Prelude hiding (mapM_, sequence_, foldr, elem)
-
-import GHC.Exts (build)
-
 -- foreign import ccall "c_glp_set_obj_name" glpSetObjName :: Ptr GlpProb -> CString -> IO ()
--- foreign import ccall safe "c_glp_set_obj_dir" glpSetObjDir :: Ptr GlpProb -> CInt -> IO ()
-foreign import ccall safe "c_glp_minimize" glpMinimize :: Ptr GlpProb -> IO ()
-foreign import ccall safe "c_glp_maximize" glpMaximize :: Ptr GlpProb -> IO ()
-foreign import ccall safe "c_glp_add_rows" glpAddRows :: Ptr GlpProb -> CInt -> IO CInt
-foreign import ccall safe "c_glp_add_cols" glpAddCols :: Ptr GlpProb -> CInt -> IO CInt
-foreign import ccall safe "c_glp_set_row_bnds" glpSetRowBnds :: Ptr GlpProb -> CInt -> CInt -> CDouble -> CDouble -> IO ()
-foreign import ccall safe "c_glp_set_col_bnds" glpSetColBnds :: Ptr GlpProb -> CInt -> CInt -> CDouble -> CDouble -> IO ()
-foreign import ccall safe "c_glp_set_obj_coef" glpSetObjCoef :: Ptr GlpProb -> CInt -> CDouble -> IO ()
-foreign import ccall safe "c_glp_set_mat_row" glpSetMatRow :: Ptr GlpProb -> CInt -> CInt -> Ptr CInt -> Ptr CDouble -> IO ()
--- foreign import ccall safe "c_glp_create_index" glpCreateIndex :: Ptr GlpProb -> IO ()
--- foreign import ccall safe "c_glp_find_row" glpFindRow :: Ptr GlpProb -> CString -> IO CInt
--- foreign import ccall safe "c_glp_find_col" glpFindCol :: Ptr GlpProb -> CString -> IO CInt
-foreign import ccall safe "c_glp_solve_simplex" glpSolveSimplex :: Ptr GlpProb -> CInt -> CInt -> CInt -> IO CInt
-foreign import ccall safe "c_glp_get_obj_val" glpGetObjVal :: Ptr GlpProb -> IO CDouble
-foreign import ccall safe "c_glp_get_row_prim" glpGetRowPrim :: Ptr GlpProb -> CInt -> IO CDouble
-foreign import ccall safe "c_glp_get_col_prim" glpGetColPrim :: Ptr GlpProb -> CInt -> IO CDouble
-foreign import ccall safe "c_glp_set_col_kind" glpSetColKind :: Ptr GlpProb -> CInt -> CInt -> IO ()
-foreign import ccall safe "c_glp_mip_solve" glpMipSolve :: 
+-- foreign import ccall unsafe "c_glp_set_obj_dir" glpSetObjDir :: Ptr GlpProb -> CInt -> IO ()
+foreign import ccall unsafe "c_glp_minimize" glpMinimize :: Ptr GlpProb -> IO ()
+foreign import ccall unsafe "c_glp_maximize" glpMaximize :: Ptr GlpProb -> IO ()
+foreign import ccall unsafe "c_glp_add_rows" glpAddRows :: Ptr GlpProb -> CInt -> IO CInt
+foreign import ccall unsafe "c_glp_add_cols" glpAddCols :: Ptr GlpProb -> CInt -> IO CInt
+foreign import ccall unsafe "c_glp_set_row_bnds" glpSetRowBnds :: Ptr GlpProb -> CInt -> CInt -> CDouble -> CDouble -> IO ()
+foreign import ccall unsafe "c_glp_set_col_bnds" glpSetColBnds :: Ptr GlpProb -> CInt -> CInt -> CDouble -> CDouble -> IO ()
+foreign import ccall unsafe "c_glp_set_obj_coef" glpSetObjCoef :: Ptr GlpProb -> CInt -> CDouble -> IO ()
+foreign import ccall unsafe "c_glp_set_mat_row" glpSetMatRow :: Ptr GlpProb -> CInt -> CInt -> Ptr CInt -> Ptr CDouble -> IO ()
+-- foreign import ccall unsafe "c_glp_create_index" glpCreateIndex :: Ptr GlpProb -> IO ()
+-- foreign import ccall unsafe "c_glp_find_row" glpFindRow :: Ptr GlpProb -> CString -> IO CInt
+-- foreign import ccall unsafe "c_glp_find_col" glpFindCol :: Ptr GlpProb -> CString -> IO CInt
+foreign import ccall unsafe "c_glp_solve_simplex" glpSolveSimplex :: Ptr GlpProb -> CInt -> CInt -> CInt -> IO CInt
+foreign import ccall unsafe "c_glp_get_obj_val" glpGetObjVal :: Ptr GlpProb -> IO CDouble
+foreign import ccall unsafe "c_glp_get_row_prim" glpGetRowPrim :: Ptr GlpProb -> CInt -> IO CDouble
+foreign import ccall unsafe "c_glp_get_col_prim" glpGetColPrim :: Ptr GlpProb -> CInt -> IO CDouble
+foreign import ccall unsafe "c_glp_set_col_kind" glpSetColKind :: Ptr GlpProb -> CInt -> CInt -> IO ()
+foreign import ccall unsafe "c_glp_mip_solve" glpMipSolve :: 
 	Ptr GlpProb -> CInt -> CInt -> CInt -> CInt -> CInt -> CInt -> CInt -> CDouble -> CInt -> IO CInt
-foreign import ccall safe "c_glp_mip_obj_val" glpMIPObjVal :: Ptr GlpProb -> IO CDouble
-foreign import ccall safe "c_glp_mip_row_val" glpMIPRowVal :: Ptr GlpProb -> CInt -> IO CDouble
-foreign import ccall safe "c_glp_mip_col_val" glpMIPColVal :: Ptr GlpProb -> CInt -> IO CDouble
-foreign import ccall safe "c_glp_set_row_name" glpSetRowName :: Ptr GlpProb -> CInt -> CString -> IO ()
-foreign import ccall safe "c_glp_get_bad_ray" glpGetBadRay :: Ptr GlpProb -> IO CInt
+foreign import ccall unsafe "c_glp_mip_obj_val" glpMIPObjVal :: Ptr GlpProb -> IO CDouble
+foreign import ccall unsafe "c_glp_mip_row_val" glpMIPRowVal :: Ptr GlpProb -> CInt -> IO CDouble
+foreign import ccall unsafe "c_glp_mip_col_val" glpMIPColVal :: Ptr GlpProb -> CInt -> IO CDouble
+foreign import ccall unsafe "c_glp_set_row_name" glpSetRowName :: Ptr GlpProb -> CInt -> CString -> IO ()
+foreign import ccall unsafe "c_glp_get_bad_ray" glpGetBadRay :: Ptr GlpProb -> IO CInt
 
 setObjectiveDirection :: Direction -> GLPK ()
 setObjectiveDirection dir = GLP $ case dir of
@@ -154,19 +149,25 @@ setRowName i nam = GLP $ withCString nam . flip glpSetRowName (fromIntegral i)
 {-# SPECIALIZE writeProblem :: Ord v => LP v Double -> GLPK (Map v Int),
 	Ord v => LP v Int -> GLPK (Map v Int) #-}
 writeProblem :: (Ord v, Real c) => LP v c -> GLPK (Map v Int)
-writeProblem LP{allVars = allVars0, ..} = do
+writeProblem LP{..} = do
 	setObjectiveDirection direction
 	i0 <- addCols nVars
 	let allVars' = fmap (i0 +) allVars
-	sequence_ $ intersectionWith setObjCoef allVars' objective
+	sequence_ [setObjCoef i v | (i, v) <- elems $ intersectionWith (,) allVars' objective]
 	j0 <- addRows (length constraints)
 	sequence_ [do	maybe (return ()) (setRowName j) lab
-			setMatRow j (elems (intersectionWith (,) allVars' f))
+			setMatRow j
+				[(i, v) | (i, v) <- elems (intersectionWith (,) allVars' f)]
 			setRowBounds j bnds
 				| (j, Constr lab f bnds) <- zip [j0..] constraints]
-	sequence_ $ intersectionWith setColBounds allVars' varBounds
-	mapM_ (`setColBounds` Free) (difference allVars' varBounds)
-	sequence_ $ intersectionWith setColKind allVars' varTypes
+-- 	createIndex
+	sequence_ [setColBounds i bnds |
+			(i, bnds) <- elems $ intersectionWith (,) allVars' varBounds]
+	sequence_ [setColBounds i Free | i <- elems $ difference allVars' varBounds]
+	sequence_ [setColKind i knd |
+			(i, knd) <- elems $ intersectionWith (,) allVars' varTypes]
 	return allVars'
-	where	nVars = size allVars
-		(_, allVars) = mapAccum (\ n _ -> (n+1, n)) (0 :: Int) allVars0
+	where	allVars0 = fmap (const ()) objective `union`
+			unions [fmap (const ()) f | Constr _ f _ <- constraints] `union`
+			fmap (const ()) varBounds `union` fmap (const ()) varTypes
+		(nVars, allVars) = mapAccum (\ n _ -> (n+1, n)) (0 :: Int) allVars0

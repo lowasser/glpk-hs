@@ -25,7 +25,6 @@ module Control.Monad.LPMonad (
 	readLPFromFile,
 	readLPFromFile') where
 
-import Control.Concurrent
 import Control.Monad ((<=<))
 import Control.Monad.State.Class (MonadState(..))
 import Control.Monad.Trans (MonadIO (..))
@@ -72,7 +71,7 @@ quickSolveMIP' = glpSolve' mipDefaults
 -- the value of each constraint/row.
 glpSolve' :: (Ord v, Real c, MonadState (LP v c) m, MonadIO m) => 
 	GLPOpts -> m (ReturnCode, Maybe (Double, Map v Double, [RowValue v c]))
-glpSolve' opts = get >>= liftIO . runInBoundThread . glpSolveAll opts
+glpSolve' opts = get >>= liftIO . glpSolveAll opts
 
 {-# SPECIALIZE writeLPToFile :: (Ord v, Show v, Real c) => FilePath -> LPT v c IO () #-}
 -- | Writes the current linear program to the specified file in CPLEX LP format. 

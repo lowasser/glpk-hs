@@ -1,9 +1,6 @@
 #include <glpk.h>
-#include <pthread.h>
 // #include <stdio.h>
 // #include <stdlib.h>
-
-extern pthread_key_t _glp_pth_key;
 
 glp_prob *c_glp_create_prob(){
   	glp_prob *lp;

@@ -1,6 +1,6 @@
-{-# LANGUAGE NamedFieldPuns, TupleSections, RecordWildCards, DeriveFunctor #-}
+{-# LANGUAGE TupleSections, RecordWildCards, DeriveFunctor #-}
 module Data.LinearProgram.Spec (Constraint(..), VarTypes, ObjectiveFunc, VarBounds, LP(..),
-	mapVars, mapVals, makeLP, ignore) where
+	mapVars, mapVals, allVars) where
 
 import Control.Applicative ((<$>))
 import Control.DeepSeq
@@ -9,8 +9,7 @@ import Control.Monad
 import Data.Char (isSpace)
 import Data.Monoid
 import Data.Functor
-import Data.List (foldl')
-import Data.Map hiding (map)
+import Data.Map hiding (map, foldl)
 
 import Text.ParserCombinators.ReadP
 
@@ -31,21 +30,12 @@ type VarBounds v c = Map v (Bounds c)
 
 -- | The specification of a linear programming problem with variables in @v@ and coefficients/constants in @c@.
 --   Note: the 'Read' and 'Show' implementations do not correspond to any particular linear program specification format.
-data LP v c = LP {direction :: Direction,
-			objective :: ObjectiveFunc v c, 
-			constraints :: [Constraint v c],
-			varBounds :: VarBounds v c, 
-			varTypes :: VarTypes v,
-			allVars :: Map v ()} deriving (Read, Show, Functor)
+data LP v c = LP {direction :: Direction, objective :: ObjectiveFunc v c, constraints :: [Constraint v c],
+			varBounds :: VarBounds v c, varTypes :: VarTypes v} deriving (Read, Show, Functor)
 
-{-# SPECIALIZE ignore :: Map k a -> Map k () #-}
-ignore :: Functor f => f a -> f ()
-ignore = (<$) ()
-
-makeLP :: Ord v => Direction -> ObjectiveFunc v c -> [Constraint v c] -> VarBounds v c -> VarTypes v -> LP v c
-makeLP direction objective constraints varBounds varTypes =
-	LP {allVars = foldl' union (ignore objective `union` ignore varBounds `union` ignore varTypes)
-		[ignore f | Constr _ f _ <- constraints], ..}
+allVars :: Ord v => LP v c -> Map v ()
+allVars LP{..} = foldl union ((() <$ objective) `union` (() <$ varBounds) `union` (() <$ varTypes))
+	[() <$ f | Constr _ f _ <- constraints]
 
 showBds :: Show c => String -> Bounds c -> String
 showBds expr bds = case bds of
@@ -55,7 +45,7 @@ showBds expr bds = case bds of
 	UBound x -> expr ++ " <= " ++ show x
 	Bound l u -> show l ++ " <= " ++ expr ++ " <= " ++ show u
 
-showFunc :: (Show v, Num c, Ord c) => LinFunc v c -> String
+showFunc :: (Show v, Num c, Ord c, Show c) => LinFunc v c -> String
 showFunc func = case assocs func of
 	[]	-> "0"
 	((v,c):vcs) ->
@@ -71,7 +61,7 @@ replaceSpace c
 	| isSpace c	= '_'
 	| otherwise	= c
 
-instance (Show v, Num c, Ord c) => Show (Constraint v c) where
+instance (Show v, Num c, Ord c, Show c) => Show (Constraint v c) where
 	show (Constr lab func bds) = maybe "" (++ ": ") lab ++
 		showBds (showFunc func) bds
 
@@ -146,12 +136,10 @@ readBds cst expr = do
 -- * In variable kinds, the most restrictive kind will be retained.
 mapVars :: (Ord v', Ord c, Group c) => (v -> v') -> LP v c -> LP v' c
 mapVars f LP{..} =  
-	LP{direction,
-		objective = mapKeysWith (^+^) f objective, 
+	LP{objective = mapKeysWith (^+^) f objective, 
 		constraints = [Constr lab (mapKeysWith (^+^) f func) bd | Constr lab func bd <- constraints],
 		varBounds = mapKeysWith mappend f varBounds,
-		varTypes = mapKeysWith mappend f varTypes,
-		allVars = mapKeys f allVars}
+		varTypes = mapKeysWith mappend f varTypes, ..}
 
 -- | Applies the specified function to the constants in the linear program.  This is only safe
 -- for a monotonic function.
